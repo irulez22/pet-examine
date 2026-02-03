@@ -1,13 +1,13 @@
-package com.example;
+package com.petexamine;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class ExamplePluginTest
+public class PetExaminePluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(ExamplePlugin.class);
+		ExternalPluginManager.loadBuiltin(PetExaminePlugin.class);
 		RuneLite.main(args);
 	}
 }
