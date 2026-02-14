@@ -20,6 +20,7 @@ import net.runelite.client.util.Text;
 
 import java.awt.*;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 @Slf4j
 @PluginDescriptor(
@@ -37,13 +38,25 @@ public class PetExaminePlugin extends Plugin
     @Inject
     private PetExamineConfig config;
 
+
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes timeout
+    private static final int CACHE_MAX_SIZE = 20; //cache last 20
+
     @Provides
     PetExamineConfig provideConfig(ConfigManager configManager)
     {
         return configManager.getConfig(PetExamineConfig.class);
     }
 
-    private final Map<String, HiscoreResult> hiscoreCache = new HashMap<>();
+    private final Map<String, CachedHiscore> hiscoreCache =
+            new LinkedHashMap<>(64, 0.75f, true)
+            {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedHiscore> eldest)
+                {
+                    return size() > CACHE_MAX_SIZE;
+                }
+            };
 
     private Polygon getTileClickbox(NPC npc)
     {
@@ -170,11 +183,13 @@ public class PetExaminePlugin extends Plugin
 
     private void lookupBossKC(String name, HiscoreSkill boss)
     {
-        HiscoreResult cached = hiscoreCache.get(name);
-        if (cached != null)
-        {
-            showBossKC(name, cached, boss);
-            return;
+        CachedHiscore cached = hiscoreCache.get(name);
+        if (cached != null) {
+            if (!cached.isExpired()) {
+                showBossKC(name, cached.result, boss);
+                return;
+            }
+            hiscoreCache.remove(name);
         }
 
         HiscoreEndpoint endpoint =
@@ -191,7 +206,7 @@ public class PetExaminePlugin extends Plugin
                             return;
                         }
 
-                        hiscoreCache.put(name, result);
+                        hiscoreCache.put(name, new CachedHiscore(result));
                         showBossKC(name, result, boss);
                     });
                 });
@@ -317,11 +332,16 @@ public class PetExaminePlugin extends Plugin
 
     private void lookupSkillXp(String name, Skill skill)
     {
-        HiscoreResult cached = hiscoreCache.get(name);
+        CachedHiscore cached = hiscoreCache.get(name);
+
         if (cached != null)
         {
-            showSkillXp(name, cached, skill);
-            return;
+            if (!cached.isExpired())
+            {
+                showSkillXp(name, cached.result, skill);
+                return;
+            }
+            hiscoreCache.remove(name);
         }
 
         HiscoreEndpoint endpoint =
@@ -338,11 +358,12 @@ public class PetExaminePlugin extends Plugin
                             return;
                         }
 
-                        hiscoreCache.put(name, result);
+                        hiscoreCache.put(name, new CachedHiscore(result));
                         showSkillXp(name, result, skill);
                     });
                 });
     }
+
 
     private void showSkillXp(String name, HiscoreResult result, Skill skill)
     {
@@ -383,5 +404,23 @@ public class PetExaminePlugin extends Plugin
     private static String format(long v)
     {
         return String.format("%,d", v);
+    }
+
+
+    private static class CachedHiscore
+    {
+        final HiscoreResult result;
+        final long timestamp;
+
+        CachedHiscore(HiscoreResult result)
+        {
+            this.result = result;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        boolean isExpired()
+        {
+            return System.currentTimeMillis() - timestamp > CACHE_TTL_MS;
+        }
     }
 }
