@@ -423,4 +423,4 @@ public class PetExaminePlugin extends Plugin
             return System.currentTimeMillis() - timestamp > CACHE_TTL_MS;
         }
     }
-}
+} 
